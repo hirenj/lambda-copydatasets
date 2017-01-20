@@ -71,6 +71,11 @@ const copy_keys = function(groups,etag_map,keys) {
   let source_bucket = keys.Name;
   (keys.Contents || []).forEach( key => {
     let source_key = key.Key;
+
+    if (source_key.match(/\/$/)) {
+      return;
+    }
+
     copy_promises = copy_promises.concat( groups.map( target_group => {
       let target_key = make_target_key(source_key,target_group);
       let params = { Bucket: bucket_name, Key: target_key, CopySource: source_bucket+'/'+source_key };
