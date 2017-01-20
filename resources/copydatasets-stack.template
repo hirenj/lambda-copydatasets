@@ -95,7 +95,6 @@
             "Action":"lambda:InvokeFunction",
             "FunctionName": { "Fn::GetAtt": [ "copyDatasets", "Arn" ]},
             "Principal": "sns.amazonaws.com",
-            "SourceAccount": {"Ref" : "AWS::AccountId" },
             "SourceArn": { "Ref" : "ConfChangesTopic" }
         }
     },
