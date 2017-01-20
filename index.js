@@ -22,6 +22,12 @@ const config_key = 'conf/copydatasets.json';
 const get_config = function() {
   return s3.getObject({'Bucket' : bucket_name, 'Key' : config_key }).promise().then( (data) => {
     return JSON.parse(data.Body);
+  }).catch( err => {
+      if (err.statusCode == 403) {
+        return {'sources' : []};
+      }
+      console.log('Error in getObject for conf ',{'Bucket' : bucket_name, 'Key' : config_key });
+      throw err;
   });
 };
 
@@ -46,6 +52,9 @@ const list_keys = function(params) {
     return s3.listObjectsV2(new_params).promise().then( list_keys ).then( (new_objects) => {
       object_data = object_data.concat(new_objects);
       return object_data;
+    }).catch( err => {
+      console.log('Error in listobjects',new_params);
+      throw err;
     });
   }
   return object_data;
@@ -75,6 +84,9 @@ const copy_keys = function(groups,etag_map,keys) {
           return;
         }
         throw err;
+      }).catch( err => {
+        console.log('Error in copyObject',params);
+        throw err;
       });
     }));
   });
@@ -89,6 +101,9 @@ const copy_keys = function(groups,etag_map,keys) {
     }
     return s3.listObjectsV2(params).promise().then( copy_keys.bind(null,groups,etag_map) ).then( (new_promises) => {
       return copy_promises.concat(new_promises);
+    }).catch( err => {
+      console.log('Error in listobjects',params);
+      throw err;
     });
   }
   return copy_promises;
@@ -105,13 +120,13 @@ const handle_sources = function(sources) {
   return current_keys.then( etag_map => {
     return copy_keys(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (copy_promises) => {
       return Promise.all(copy_promises);
-    }).then( () => handle_sources(null,sources) );
+    }).then( () => handle_sources(sources) );
   });
 };
 
 const copyDatasets = function(event,context) {
   get_config().then( conf => {
-    console.log('Data synchronisation parameters');
+    console.log('Data synchronisation parameters',conf.sources);
     return handle_sources(conf.sources);
   }).then( () => {
     context.succeed('OK');
