@@ -35,11 +35,10 @@ const copy_keys = function(groups,keys) {
   let source_bucket = keys.Name;
   (keys.Contents || []).forEach( key => {
     let source_key = key.Key;
-    let etag = key.ETag;
     copy_promises = copy_promises.concat( groups.map( target_group => {
       let target_key = make_target_key(source_key,target_group);
       let params = { Bucket: bucket_name, Key: target_key, CopySource: source_bucket+'/'+source_key };
-      return s3.copyObject(params).promise().then( () => console.log("Copied ",params.CopySource));
+      return s3.copyObject(params).promise().then( () => console.log('Copied ',params.CopySource));
     }));
   });
   if (keys.FirstRun || (keys.isTruncated && keys.NextContinuationToken)) {
@@ -69,11 +68,11 @@ const handle_sources = function(sources) {
   return copy_keys(groups, {Name: bucket, Prefix: key, FirstRun: true }).then( (copy_promises) => {
     return Promise.all(copy_promises);
   }).then( () => handle_sources(null,sources) );
-}
+};
 
 const copyDatasets = function(event,context) {
   get_config().then( conf => {
-    console.log("Data synchronisation parameters");
+    console.log('Data synchronisation parameters');
     return handle_sources(conf.sources);
   }).then( () => {
     context.succeed('OK');

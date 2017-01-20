@@ -79,31 +79,24 @@
         }
       }
     },
-    "dataBucket": {
-      "Type" : "AWS::S3::Bucket",
+    "ConfChangesTopic" : {
+      "Type" : "AWS::SNS::Topic",
       "Properties" : {
-        "NotificationConfiguration" : {
-        "LambdaConfigurations" : [ {
-          "Event" : "s3:ObjectCreated:*",
-          "Filter" : { "S3Key" : { "Rules" : [ {"Name" : "prefix", "Value" : "conf/copydatasets.json"} ] }},
-          "Function" : { "Fn::GetAtt": [ "copyDatasets", "Arn" ]}
-        },{
-          "Event" : "s3:ObjectRemoved:*",
-          "Filter" : { "S3Key" : { "Rules" : [ {"Name" : "prefix", "Value" : "conf/copydatasets.json"} ] }},
-          "Function" : { "Fn::GetAtt": [ "copyDatasets", "Arn" ]}
+        "DisplayName" : "Configuration Changes",
+        "Subscription" : [{
+          "Endpoint" : { "Fn::GetAtt": [ "copyDatasets", "Arn" ]},
+          "Protocol" : "lambda"
         }]
-        }
-      },
-      "DependsOn" : ["copyDatasets"]
+      }
     },
     "CopyDatasetsConfChangesPermission": {
         "Type" : "AWS::Lambda::Permission",
         "Properties" : {
             "Action":"lambda:invokeFunction",
             "FunctionName": { "Fn::GetAtt": [ "copyDatasets", "Arn" ]},
-            "Principal": "s3.amazonaws.com",
+            "Principal": "sns.amazonaws.com",
             "SourceAccount": {"Ref" : "AWS::AccountId" },
-            "SourceArn": { "Fn::Join" :  [ "", [ "arn:aws:s3:", ":" ,":", {"Ref": "AWS::StackName"}, "-gator" ] ] }
+            "SourceArn": { "Ref" : "ConfChangesTopic" }
         }
     },
     "copyDatasetsLogWriterPolicy": {
