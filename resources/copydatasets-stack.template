@@ -92,7 +92,7 @@
     "CopyDatasetsConfChangesPermission": {
         "Type" : "AWS::Lambda::Permission",
         "Properties" : {
-            "Action":"lambda:invokeFunction",
+            "Action":"lambda:InvokeFunction",
             "FunctionName": { "Fn::GetAtt": [ "copyDatasets", "Arn" ]},
             "Principal": "sns.amazonaws.com",
             "SourceAccount": {"Ref" : "AWS::AccountId" },
