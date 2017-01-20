@@ -74,6 +74,21 @@
               "Resource": [
                 { "Fn::Join" :  [ "", [ "arn:aws:s3:", ":" ,":", {"Ref": "AWS::StackName"}, "-gator", "/uploads/*" ] ]}
               ]
+            },
+            {
+              "Sid": "ListDatasets",
+              "Effect": "Allow",
+              "Action": [
+                  "s3:ListBucket"
+              ],
+              "Resource": [
+                { "Fn::Join" :  [ "", [ "arn:aws:s3:", ":" ,":", {"Ref": "AWS::StackName"}, "-gator" ] ]}
+              ],
+              "Condition" : {
+               "StringEquals" : {
+                 "s3:prefix": "uploads/"
+               }
+              }
             }
           ]
         }
