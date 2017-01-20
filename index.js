@@ -26,11 +26,38 @@ const get_config = function() {
 };
 
 const make_target_key = function(source,group) {
-  let sanitised_source = source.replace('/','_').replace('\.json$').replace(/[^A-Za-z0-9_]/,'');
+  let sanitised_source = source.replace('/','_').replace('-','_').replace(/\.json$/,'').replace(/[^A-Za-z0-9_]/,'');
   return `uploads/${sanitised_source}/${group}`;
 };
 
-const copy_keys = function(groups,keys) {
+const list_keys = function(params) {
+  let object_data = (params.Contents || [] ).map( key => {
+    return { Key: key.Key, etag: key.ETag };
+  });
+  if (params.Bucket || (params.isTruncated && params.NextContinuationToken)) {
+    let new_params = {
+      Bucket : params.Bucket || params.Name,
+      ContinuationToken: params.NextContinuationToken,
+      Prefix : 'uploads/'
+    };
+    if (params.Bucket) {
+      delete params.ContinuationToken;
+    }
+    return s3.listObjectsV2(new_params).promise().then( list_keys ).then( (new_objects) => {
+      object_data = object_data.concat(new_objects);
+      return object_data;
+    });
+  }
+  return object_data;
+};
+
+const current_keys = list_keys({Bucket: bucket_name }).then( (keys) => {
+  let mapping = {};
+  keys.forEach( key => mapping[key.Key] = key.etag );
+  return mapping;
+});
+
+const copy_keys = function(groups,etag_map,keys) {
   let copy_promises = [];
   let source_bucket = keys.Name;
   (keys.Contents || []).forEach( key => {
@@ -38,19 +65,29 @@ const copy_keys = function(groups,keys) {
     copy_promises = copy_promises.concat( groups.map( target_group => {
       let target_key = make_target_key(source_key,target_group);
       let params = { Bucket: bucket_name, Key: target_key, CopySource: source_bucket+'/'+source_key };
-      return s3.copyObject(params).promise().then( () => console.log('Copied ',params.CopySource));
+      if (etag_map[target_key]) {
+        params.CopySourceIfNoneMatch = etag_map[target_key];
+      }
+      return s3.copyObject(params).promise()
+      .then( () => console.log('Copied',params.CopySource, 'to',target_key))
+      .catch( err => {
+        if (err.statusCode == 412) {
+          return;
+        }
+        throw err;
+      });
     }));
   });
-  if (keys.FirstRun || (keys.isTruncated && keys.NextContinuationToken)) {
+  if (keys.Bucket || (keys.isTruncated && keys.NextContinuationToken)) {
     let params = {
       Bucket: keys.Bucket || keys.Name,
       Prefix: keys.Prefix,
       ContinuationToken: keys.NextContinuationToken
     };
-    if (keys.FirstRun) {
+    if (keys.Bucket) {
       delete params.ContinuationToken;
     }
-    return s3.listObjectsV2(params).promise().then( copy_keys.bind(null,groups) ).then( (new_promises) => {
+    return s3.listObjectsV2(params).promise().then( copy_keys.bind(null,groups,etag_map) ).then( (new_promises) => {
       return copy_promises.concat(new_promises);
     });
   }
@@ -65,9 +102,11 @@ const handle_sources = function(sources) {
   let bucket = source.bucket;
   let key = source.key;
   let groups = source.groups;
-  return copy_keys(groups, {Name: bucket, Prefix: key, FirstRun: true }).then( (copy_promises) => {
-    return Promise.all(copy_promises);
-  }).then( () => handle_sources(null,sources) );
+  return current_keys.then( etag_map => {
+    return copy_keys(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (copy_promises) => {
+      return Promise.all(copy_promises);
+    }).then( () => handle_sources(null,sources) );
+  });
 };
 
 const copyDatasets = function(event,context) {
