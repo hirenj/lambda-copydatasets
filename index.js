@@ -38,7 +38,7 @@ const make_target_key = function(source,group) {
 
 const list_keys = function(params) {
   let object_data = (params.Contents || [] ).map( key => {
-    return { Key: key.Key, etag: key.ETag };
+    return { Key: key.Key, etag: key.ETag, modified: key.LastModified };
   });
   if (params.Bucket || (params.isTruncated && params.NextContinuationToken)) {
     let new_params = {
@@ -62,7 +62,7 @@ const list_keys = function(params) {
 
 const current_keys = list_keys({Bucket: bucket_name }).then( (keys) => {
   let mapping = {};
-  keys.forEach( key => mapping[key.Key] = key.etag );
+  keys.forEach( key => mapping[key.Key] = key.modified );
   return mapping;
 });
 
@@ -80,7 +80,10 @@ const copy_keys = function(groups,etag_map,keys) {
       let target_key = make_target_key(source_key,target_group);
       let params = { Bucket: bucket_name, Key: target_key, CopySource: source_bucket+'/'+source_key };
       if (etag_map[target_key]) {
-        params.CopySourceIfNoneMatch = etag_map[target_key];
+        params.CopySourceIfModifiedSince = etag_map[target_key];
+        if (key.LastModified > etag_map[target_key]) {
+          console.log('Modified dates do not match for ',target_key,key.LastModified,etag_map[target_key]);
+        }
       }
       return s3.copyObject(params).promise()
       .then( () => console.log('Copied',params.CopySource, 'to',target_key))
