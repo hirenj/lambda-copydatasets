@@ -32,7 +32,13 @@ const get_config = function() {
 };
 
 const make_target_key = function(source,group) {
-  let sanitised_source = source.replace('/','_').replace('-','_').replace(/\.json$/,'').replace(/[^A-Za-z0-9_]/,'');
+  source = source.replace('/','_').replace(/\.json$/,'');
+  let source_components = source.split('_');
+  if (source_components[0] === source_components[1]) {
+    source_components.shift();
+  }
+  source = source_components.join('_');
+  let sanitised_source = source.replace('-','_').replace(/[^A-Za-z0-9_]/,'');
   return `uploads/${sanitised_source}/${group}`;
 };
 
@@ -89,6 +95,7 @@ const copy_keys = function(groups,etag_map,keys) {
       .then( () => console.log('Copied',params.CopySource, 'to',target_key))
       .catch( err => {
         if (err.statusCode == 412) {
+          console.log('Modified dates match for ',target_key,key.LastModified,etag_map[target_key]);
           return;
         }
         throw err;
