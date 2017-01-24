@@ -32,13 +32,13 @@ const get_config = function() {
 };
 
 const make_target_key = function(source,group) {
-  source = source.replace('/','_').replace(/\.json$/,'');
+  source = source.replace('/','_').replace(/\.json$/,'').replace(/\.msdata$/,'');
   let source_components = source.split('_');
   if (source_components[0] === source_components[1]) {
     source_components.shift();
   }
   source = source_components.join('_');
-  let sanitised_source = source.replace('-','_').replace(/[^A-Za-z0-9_]/,'');
+  let sanitised_source = source.replace('-','_').replace(/[^A-Za-z0-9_]/g,'');
   return `uploads/${sanitised_source}/${group}`;
 };
 
