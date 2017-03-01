@@ -139,7 +139,35 @@ const handle_sources = function(sources) {
   });
 };
 
+const extract_changed_keys = function(event) {
+  if ( ! event.Records ) {
+    return [];
+  }
+  let results = event.Records
+  .filter( rec => rec.Sns )
+  .map( rec => {
+    let sns_message = JSON.parse(rec.Sns.Message);
+    return sns_message.Records.map( sns_rec => sns_rec.s3 ).map( s3 => {
+      return { bucket : s3.bucket.name, key: s3.object.key };
+    });
+  });
+  results = [].concat.apply([],results);
+  return results.filter( obj => obj.bucket == bucket_name ).map( obj => obj.key );
+};
+
 const copyDatasets = function(event,context) {
+  let changed_keys = extract_changed_keys(event);
+
+  // If we have changed files (as extracted from the SNS message from the subscribed topic)
+  // we should check to make sure that the file that triggered this execution was
+  // our config file
+
+  if (changed_keys.length > 0 && changed_keys.indexOf(config_key) < 0) {
+    console.log(`Skipping execution since ${config_key} was not modified`);
+    context.succeed('OK');
+    return;
+  }
+
   get_config().then( conf => {
     console.log('Data synchronisation parameters',conf.sources);
     return handle_sources(conf.sources);
