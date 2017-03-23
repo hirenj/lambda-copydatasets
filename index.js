@@ -137,11 +137,23 @@ const remove_keys = function(keys) {
   return s3.deleteObjects(params).promise();
 };
 
-const handle_sources = function(sources) {
-  let source = (sources || []).shift();
+const handle_sources = function(sources,idx) {
+  let source = sources[idx];
   if ( ! source ) {
     return current_keys.then( etag_map => {
-      return remove_keys(Object.keys(etag_map));
+      let source_keys = sources.map( source => source.key.replace('-','_').replace(/[^A-Za-z0-9_]/g,'_').replace(/_$/,'') );
+      console.log(Object.keys(etag_map));
+      console.log(source_keys);
+      let remaining_keys = Object.keys(etag_map).filter( key => {
+        key = key.replace(/^uploads\//,'');
+        let matching_sources = source_keys.filter( prefix => {
+          return key.indexOf(prefix) == 0;
+        });
+        return matching_sources.length > 0;
+      });
+      console.log("Remaining keys after filtering by source");
+      console.dir(remaining_keys);
+      return remove_keys(remaining_keys);
     });
   }
   let bucket = source.bucket;
@@ -150,7 +162,7 @@ const handle_sources = function(sources) {
   return current_keys.then( etag_map => {
     return copy_keys(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (copy_promises) => {
       return Promise.all(copy_promises);
-    }).then( () => handle_sources(sources) );
+    }).then( () => handle_sources(sources,idx+1) );
   });
 };
 
@@ -185,7 +197,7 @@ const copyDatasets = function(event,context) {
 
   get_config().then( conf => {
     console.log('Data synchronisation parameters',conf.sources);
-    return handle_sources(conf.sources);
+    return handle_sources(conf.sources,0);
   }).then( () => {
     context.succeed('OK');
   }).catch( err => {
