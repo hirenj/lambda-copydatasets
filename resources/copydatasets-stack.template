@@ -69,7 +69,8 @@
               "Sid": "CopyDatasets",
               "Effect": "Allow",
               "Action": [
-                  "s3:PutObject"
+                  "s3:PutObject",
+                  "s3:DeleteObject"
               ],
               "Resource": [
                 { "Fn::Join" :  [ "", [ "arn:aws:s3:", ":" ,":", {"Ref": "AWS::StackName"}, "-gator", "/uploads/*" ] ]}

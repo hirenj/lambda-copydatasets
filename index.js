@@ -99,7 +99,9 @@ const copy_keys = function(groups,etag_map,keys) {
           return;
         }
         throw err;
-      }).catch( err => {
+      })
+      .then( () => delete etag_map[target_key] )
+      .catch( err => {
         console.log('Error in copyObject',params);
         throw err;
       });
@@ -124,10 +126,23 @@ const copy_keys = function(groups,etag_map,keys) {
   return copy_promises;
 };
 
+const remove_keys = function(keys) {
+  let params = { Bucket: bucket_name,
+                 Delete : {} };
+  console.log(keys.length,'keys to remove');
+  if (keys.length < 1 ) {
+    return Promise.resolve();
+  }
+  params.Delete.Objects = keys.map( key => { return { Key: key }; });
+  return s3.deleteObjects(params).promise();
+};
+
 const handle_sources = function(sources) {
   let source = (sources || []).shift();
   if ( ! source ) {
-    return;
+    return current_keys.then( etag_map => {
+      return remove_keys(Object.keys(etag_map));
+    });
   }
   let bucket = source.bucket;
   let key = source.key;
