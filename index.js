@@ -66,11 +66,16 @@ const list_keys = function(params) {
   return object_data;
 };
 
-const current_keys = list_keys({Bucket: bucket_name }).then( (keys) => {
-  let mapping = {};
-  keys.forEach( key => mapping[key.Key] = key.modified );
-  return mapping;
-});
+let current_keys = Promise.reject();
+
+const generate_current_keys = function() {
+  current_keys = list_keys({Bucket: bucket_name }).then( (keys) => {
+    let mapping = {};
+    keys.forEach( key => mapping[key.Key] = key.modified );
+    return mapping;
+  });
+  return current_keys;
+};
 
 const copy_keys = function(groups,etag_map,keys) {
   let copy_promises = [];
@@ -90,6 +95,8 @@ const copy_keys = function(groups,etag_map,keys) {
         if (key.LastModified > etag_map[target_key]) {
           console.log('Modified dates do not match for ',target_key,key.LastModified,etag_map[target_key]);
         }
+      } else {
+        console.log("Target does not exist ",target_key);
       }
       return s3.copyObject(params).promise()
       .then( () => console.log('Copied',params.CopySource, 'to',target_key))
@@ -140,7 +147,7 @@ const remove_keys = function(keys) {
 const handle_sources = function(sources,idx) {
   let source = sources[idx];
   if ( ! source ) {
-    return current_keys.then( etag_map => {
+    return current_keys.catch( err => generate_current_keys() ).then( etag_map => {
       let source_keys = sources.map( source => source.key.replace('-','_').replace(/[^A-Za-z0-9_]/g,'_').replace(/_$/,'') );
       console.log(Object.keys(etag_map));
       console.log(source_keys);
@@ -159,7 +166,7 @@ const handle_sources = function(sources,idx) {
   let bucket = source.bucket;
   let key = source.key;
   let groups = source.groups;
-  return current_keys.then( etag_map => {
+  return current_keys.catch( err => generate_current_keys() ).then( etag_map => {
     return copy_keys(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (copy_promises) => {
       return Promise.all(copy_promises);
     }).then( () => handle_sources(sources,idx+1) );
@@ -191,6 +198,7 @@ const copyDatasets = function(event,context) {
 
   if (changed_keys.length > 0 && changed_keys.indexOf(config_key) < 0) {
     console.log(`Skipping execution since ${config_key} was not modified`);
+    current_keys = Promise.reject();
     context.succeed('OK');
     return;
   }
@@ -199,8 +207,10 @@ const copyDatasets = function(event,context) {
     console.log('Data synchronisation parameters',conf.sources);
     return handle_sources(conf.sources,0);
   }).then( () => {
+    current_keys = Promise.reject();
     context.succeed('OK');
   }).catch( err => {
+    current_keys = Promise.reject();
     console.error(err);
     console.error(err.stack);
     context.fail('NOT-OK');
