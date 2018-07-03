@@ -14,7 +14,7 @@
         "Description" : "copyDatasets",
         "Handler" : "index.copyDatasets",
         "Role" : {"Fn::GetAtt" : ["LambdaCopyDatasetsRole", "Arn"] },
-        "Runtime" : "nodejs4.3",
+        "Runtime" : "nodejs6.10",
         "MemorySize" : 128,
         "Timeout" : 300
       }

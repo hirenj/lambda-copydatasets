@@ -96,7 +96,7 @@ const copy_keys = function(groups,etag_map,keys) {
           console.log('Modified dates do not match for ',target_key,key.LastModified,etag_map[target_key]);
         }
       } else {
-        console.log("Target does not exist ",target_key);
+        console.log('Target does not exist ',target_key);
       }
       return s3.copyObject(params).promise()
       .then( () => console.log('Copied',params.CopySource, 'to',target_key))
@@ -147,7 +147,7 @@ const remove_keys = function(keys) {
 const handle_sources = function(sources,idx) {
   let source = sources[idx];
   if ( ! source ) {
-    return current_keys.catch( err => generate_current_keys() ).then( etag_map => {
+    return current_keys.catch( () => generate_current_keys() ).then( etag_map => {
       let source_keys = sources.map( source => source.key.replace('-','_').replace(/[^A-Za-z0-9_]/g,'_').replace(/_$/,'') );
       console.log(Object.keys(etag_map));
       console.log(source_keys);
@@ -158,7 +158,7 @@ const handle_sources = function(sources,idx) {
         });
         return matching_sources.length > 0;
       });
-      console.log("Remaining keys after filtering by source");
+      console.log('Remaining keys after filtering by source');
       console.dir(remaining_keys);
       return remove_keys(remaining_keys);
     });
@@ -166,7 +166,7 @@ const handle_sources = function(sources,idx) {
   let bucket = source.bucket;
   let key = source.key;
   let groups = source.groups;
-  return current_keys.catch( err => generate_current_keys() ).then( etag_map => {
+  return current_keys.catch( () => generate_current_keys() ).then( etag_map => {
     return copy_keys(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (copy_promises) => {
       return Promise.all(copy_promises);
     }).then( () => handle_sources(sources,idx+1) );
