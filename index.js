@@ -154,7 +154,7 @@ const handle_sources = function(sources,idx) {
       let remaining_keys = Object.keys(etag_map).filter( key => {
         key = key.replace(/^uploads\//,'');
         let matching_sources = source_keys.filter( prefix => {
-          return key.indexOf(prefix) == 0;
+          return key.indexOf(prefix) === 0;
         });
         return matching_sources.length > 0;
       });
