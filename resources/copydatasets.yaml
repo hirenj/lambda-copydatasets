@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  copyDatasets:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: exports.copyDatasets = function(event, context) {  context.succeed('OK');};
+      Description: copyDatasets
+      Handler: index.copyDatasets
+      Role: !GetAtt 'LambdaCopyDatasetsRole.Arn'
+      Runtime: nodejs8.10
+      MemorySize: 128
+      Timeout: 300
+  LambdaCopyDatasetsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Ref 'CopyDatasetsPolicy'
+        - !Ref 'ReadConfig'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+  ReadConfig:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: ReadConfig
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ReadConfigFile
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-gator/conf/copydatasets.json'
+  CopyDatasetsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: CopyDatasetsPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CopyDatasets
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-gator/uploads/*'
+          - Sid: ListDatasets
+            Effect: Allow
+            Action:
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-gator'
+            Condition:
+              StringEquals:
+                s3:prefix: uploads/
+  ConfChangesTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Configuration Changes
+      Subscription:
+        - Endpoint: !GetAtt 'copyDatasets.Arn'
+          Protocol: lambda
+  CopyDatasetsConfChangesPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt 'copyDatasets.Arn'
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref 'ConfChangesTopic'
+  copyDatasetsLogWriterPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: copyDatasetsLogWriterPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+      Roles:
+        - !Ref 'LambdaCopyDatasetsRole'
+Outputs: {}
