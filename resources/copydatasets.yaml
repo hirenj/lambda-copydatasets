@@ -15,8 +15,28 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       ManagedPolicyArns:
-        - !Ref 'CopyDatasetsPolicy'
         - !Ref 'ReadConfig'
+      Policies:
+        - PolicyName: CopyDatasetsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CopyDatasets
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-gator/uploads/*'
+              - Sid: ListDatasets
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-gator'
+                Condition:
+                  StringEquals:
+                    s3:prefix: uploads/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -37,29 +57,6 @@ Resources:
               - s3:GetObject
             Resource:
               - !Sub 'arn:aws:s3:::${AWS::StackName}-gator/conf/copydatasets.json'
-  CopyDatasetsPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      Description: CopyDatasetsPolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: CopyDatasets
-            Effect: Allow
-            Action:
-              - s3:PutObject
-              - s3:DeleteObject
-            Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-gator/uploads/*'
-          - Sid: ListDatasets
-            Effect: Allow
-            Action:
-              - s3:ListBucket
-            Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-gator'
-            Condition:
-              StringEquals:
-                s3:prefix: uploads/
   ConfChangesTopic:
     Type: AWS::SNS::Topic
     Properties:
