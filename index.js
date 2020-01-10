@@ -222,7 +222,7 @@ const handle_sources = function(sources,idx,action=copy_keys,remove=remove_keys)
   return (current_keys ? current_keys : generate_current_keys()).then( etag_map => {
     return action(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (action_promises) => {
       return Promise.all(action_promises);
-    }).then( () => handle_sources(sources,idx+1,action) );
+    }).then( () => handle_sources(sources,idx+1,action,remove) );
   });
 };
 
