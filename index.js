@@ -66,7 +66,7 @@ const list_keys = function(params) {
   return object_data;
 };
 
-let current_keys = Promise.reject();
+let current_keys = null;
 
 const generate_current_keys = function() {
   current_keys = list_keys({Bucket: bucket_name }).then( (keys) => {
@@ -75,6 +75,64 @@ const generate_current_keys = function() {
     return mapping;
   });
   return current_keys;
+};
+
+const print_changed_files = function(groups,etag_map,keys) {
+  let meta_promises = [];
+  let source_bucket = keys.Name;
+  (keys.Contents || []).forEach( key => {
+    let source_key = key.Key;
+
+    if (source_key.match(/\/$/)) {
+      return;
+    }
+    meta_promises = meta_promises.concat( groups.map( target_group => {
+      let target_key = make_target_key(source_key,target_group);
+      let params = { Bucket: source_bucket, Key: source_key };
+      if (etag_map[target_key]) {
+        params.IfModifiedSince = etag_map[target_key];
+      }
+      return s3.headObject(params).promise()
+      .catch( err => {
+        if (err.statusCode === 304) {
+          return;
+        }
+        throw err;
+      })
+      .then( key => {
+        if (! key ) {
+          return;
+        }
+        if ( ! etag_map[target_key]) {
+          console.log([source_bucket,source_key,'',key.LastModified.toISOString().slice(0,10)].join('\t'));
+        } else if (key.LastModified > etag_map[target_key]) {
+          console.log([source_bucket,source_key,etag_map[target_key].toISOString().slice(0,10),key.LastModified.toISOString().slice(0,10)].join('\t'));
+        }
+        delete etag_map[target_key];
+      })
+      .catch( err => {
+        console.log('Error in print_changed_files',params,err);
+        throw err;
+      });
+    }));
+  });
+  if (keys.Bucket || (keys.isTruncated && keys.NextContinuationToken)) {
+    let params = {
+      Bucket: keys.Bucket || keys.Name,
+      Prefix: keys.Prefix,
+      ContinuationToken: keys.NextContinuationToken
+    };
+    if (keys.Bucket) {
+      delete params.ContinuationToken;
+    }
+    return s3.listObjectsV2(params).promise().then( print_changed_files.bind(null,groups,etag_map) ).then( (new_promises) => {
+      return meta_promises.concat(new_promises);
+    }).catch( err => {
+      console.log('Error in listobjects',params);
+      throw err;
+    });
+  }
+  return meta_promises;
 };
 
 const copy_keys = function(groups,etag_map,keys) {
@@ -136,7 +194,6 @@ const copy_keys = function(groups,etag_map,keys) {
 const remove_keys = function(keys) {
   let params = { Bucket: bucket_name,
                  Delete : {} };
-  console.log(keys.length,'keys to remove');
   if (keys.length < 1 ) {
     return Promise.resolve();
   }
@@ -144,13 +201,11 @@ const remove_keys = function(keys) {
   return s3.deleteObjects(params).promise();
 };
 
-const handle_sources = function(sources,idx) {
+const handle_sources = function(sources,idx,action=copy_keys,remove=remove_keys) {
   let source = sources[idx];
   if ( ! source ) {
-    return current_keys.catch( () => generate_current_keys() ).then( etag_map => {
+    return (current_keys ? current_keys : generate_current_keys()).then( etag_map => {
       let source_keys = sources.map( source => source.key.replace('-','_').replace(/[^A-Za-z0-9_]/g,'_').replace(/_$/,'') );
-      console.log(Object.keys(etag_map));
-      console.log(source_keys);
       let remaining_keys = Object.keys(etag_map).filter( key => {
         key = key.replace(/^uploads\//,'');
         let matching_sources = source_keys.filter( prefix => {
@@ -158,18 +213,16 @@ const handle_sources = function(sources,idx) {
         });
         return matching_sources.length > 0;
       });
-      console.log('Remaining keys after filtering by source');
-      console.dir(remaining_keys);
-      return remove_keys(remaining_keys);
+      return remove(remaining_keys);
     });
   }
   let bucket = source.bucket;
   let key = source.key;
   let groups = source.groups;
-  return current_keys.catch( () => generate_current_keys() ).then( etag_map => {
-    return copy_keys(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (copy_promises) => {
-      return Promise.all(copy_promises);
-    }).then( () => handle_sources(sources,idx+1) );
+  return (current_keys ? current_keys : generate_current_keys()).then( etag_map => {
+    return action(groups, etag_map, { Bucket: bucket, Prefix: key }).then( (action_promises) => {
+      return Promise.all(action_promises);
+    }).then( () => handle_sources(sources,idx+1,action) );
   });
 };
 
@@ -189,6 +242,17 @@ const extract_changed_keys = function(event) {
   return results.filter( obj => obj.bucket == bucket_name ).map( obj => obj.key );
 };
 
+const printFilesToCopy = function() {
+  return get_config().then( conf => {
+    return handle_sources(conf.sources,0,print_changed_files,() => {});
+  });
+};
+
+process.on('unhandledRejection', error => {
+  // Will print "unhandledRejection err is not defined"
+  console.log('unhandledRejection', error);
+});
+
 const copyDatasets = function(event,context) {
   let changed_keys = extract_changed_keys(event);
 
@@ -198,7 +262,7 @@ const copyDatasets = function(event,context) {
 
   if (changed_keys.length > 0 && changed_keys.indexOf(config_key) < 0) {
     console.log(`Skipping execution since ${config_key} was not modified`);
-    current_keys = Promise.reject();
+    current_keys = null;
     context.succeed('OK');
     return;
   }
@@ -207,14 +271,17 @@ const copyDatasets = function(event,context) {
     console.log('Data synchronisation parameters',conf.sources);
     return handle_sources(conf.sources,0);
   }).then( () => {
-    current_keys = Promise.reject();
+    current_keys = null;
     context.succeed('OK');
   }).catch( err => {
-    current_keys = Promise.reject();
+    current_keys = null;
     console.error(err);
     console.error(err.stack);
     context.fail('NOT-OK');
   });
 };
+
+
+exports.printFilesToCopy = printFilesToCopy;
 
 exports.copyDatasets = copyDatasets;
