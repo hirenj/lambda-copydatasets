@@ -16,6 +16,6 @@ do
 	changed="${fileinfo[1]}"
 	if [ "$file" != "" ]; then
 		echo -e "$GREEN$file$NC updated on $GREEN$changed$NC"
-		aws s3 cp "$file" - | head -3 | cut -c -120
+		aws s3 cp "$file" - | head -5 | cut -c -120
 	fi
 done < <(echo -e "$files")
