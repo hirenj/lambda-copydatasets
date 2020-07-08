@@ -8,7 +8,7 @@ Resources:
       Description: copyDatasets
       Handler: index.copyDatasets
       Role: !GetAtt 'LambdaCopyDatasetsRole.Arn'
-      Runtime: nodejs8.10
+      Runtime: !Ref nodejsversion
       MemorySize: 128
       Timeout: 300
   LambdaCopyDatasetsRole:
