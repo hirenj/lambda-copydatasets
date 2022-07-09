@@ -2,7 +2,7 @@
 
 trap "exit" INT
 
-files=$(node scripts/dry_run.js | awk -F$'\t' '{ print "s3://" $1 "/" $2 FS $4 }' | grep -v 'ccg-glycomics-data/glycoproteome' )
+files=$(node scripts/dry_run.js | awk -F$'\t' '!/^#/ { print "s3://" $1 "/" $2 FS $4 } /#/ { print }' | grep -v 'ccg-glycomics-data/glycoproteome' )
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -18,4 +18,6 @@ do
 		echo -e "$GREEN$file$NC updated on $GREEN$changed$NC"
 		aws s3 cp "$file" - | head -5 | cut -c -120
 	fi
-done < <(echo -e "$files")
+done < <(echo -e "$files" | grep -v '^#')
+
+echo "$files" | grep '^#'

@@ -95,6 +95,7 @@ const print_changed_files = function(groups,etag_map,keys) {
       return s3.headObject(params).promise()
       .catch( err => {
         if (err.statusCode === 304) {
+          delete etag_map[target_key];
           return;
         }
         throw err;
@@ -133,6 +134,10 @@ const print_changed_files = function(groups,etag_map,keys) {
     });
   }
   return meta_promises;
+};
+
+const print_deleted_files = function(keys) {
+  console.log('#TOREMOVE:  '+keys.join(' , '));
 };
 
 const copy_keys = function(groups,etag_map,keys) {
@@ -244,7 +249,7 @@ const extract_changed_keys = function(event) {
 
 const printFilesToCopy = function() {
   return get_config().then( conf => {
-    return handle_sources(conf.sources,0,print_changed_files,() => {});
+    return handle_sources(conf.sources,0,print_changed_files,print_deleted_files);
   });
 };
 
